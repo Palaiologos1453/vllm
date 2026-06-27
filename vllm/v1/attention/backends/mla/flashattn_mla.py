@@ -46,8 +46,6 @@ class FlashAttnMLABackend(MLACommonBackend):
         "auto",
         "float16",
         "bfloat16",
-        "fp8",
-        "fp8_e4m3",
     ]
 
     @staticmethod
@@ -187,7 +185,7 @@ class FlashAttnMLAMetadataBuilder(MLACommonMetadataBuilder[FlashAttnMLAMetadata]
                 num_heads_kv=1,
                 headdim=self.mla_dims.qk_rope_head_dim,
                 cache_seqlens=seqlens,
-                qkv_dtype=self.q_data_type,
+                qkv_dtype=self.kv_cache_spec.dtype,
                 headdim_v=self.mla_dims.kv_lora_rank,
                 page_size=self.page_size,
                 cu_seqlens_q=cu_query_lens,
@@ -313,7 +311,9 @@ class FlashAttnMLAImpl(MLACommonImpl[FlashAttnMLAMetadata]):
             )
 
         if is_quantized_kv_cache(self.kv_cache_dtype):
-            self.supports_quant_query_input = False
+            raise NotImplementedError(
+                "FlashAttnMLA V1 with FP8 KV cache not yet supported"
+            )
 
     def forward_mqa(
         self,
@@ -333,13 +333,7 @@ class FlashAttnMLAImpl(MLACommonImpl[FlashAttnMLAMetadata]):
             )
 
         if is_quantized_kv_cache(self.kv_cache_dtype):
-            # FA3's MLA q_v path currently requires q/k/v to have the same
-            # fp16/bf16 dtype, so dequantize the standard fp8 MLA cache before
-            # dispatching to the FA3 MLA kernel. MLA stores kv_c and k_pe in
-            # one cache with one scale.
-            kv_c_and_k_pe_cache = kv_c_and_k_pe_cache.to(
-                q_pe.dtype
-            ) * layer._k_scale.to(q_pe.dtype)
+            raise NotImplementedError("FP8 FlashAttention MLA not yet supported")
 
         kv_c_cache = kv_c_and_k_pe_cache[..., : self.kv_lora_rank]
         k_pe_cache = kv_c_and_k_pe_cache[..., self.kv_lora_rank :]
